@@ -1,28 +1,69 @@
 name: CI/CD Pipeline
 
+# Trigger the pipeline on push events to the 'index.html' file
 on:
   push:
     paths:
       - 'index.html'
 
+# Define environment variables for SSH connection
+env:
+  MANAGER_IP: 20.25.0.130
+  SSH_USER: root
+  SSH_PORT: 8022
+
 jobs:
+  # Define the build job
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # Use the latest Ubuntu runner
 
     steps:
+      # Step to check out the repository code
       - name: Checkout repository
         uses: actions/checkout@v2
 
+      # Step to set up Docker Buildx, a Docker CLI plugin for extended build capabilities
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
 
+      # Step to log in to Docker Hub using secrets for username and token
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
+      # Step to build and push the Docker image to Docker Hub
       - name: Build and push Docker image
         run: |
           docker build -t ${{ secrets.DOCKER_USERNAME }}/docker-swarm-webapp:latest .
           docker push ${{ secrets.DOCKER_USERNAME }}/docker-swarm-webapp:latest
+
+  # Define the deploy job, which depends on the build job
+  deploy:
+    runs-on: ubuntu-latest  # Use the latest Ubuntu runner
+    needs: build  # Ensure this job runs after the build job
+
+    steps:
+      # Step to generate an SSH key pair for secure server access
+      - name: Generate SSH Key Pair
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keygen -t ed25519 -P "" -f ~/.ssh/id_ed25519
+          echo "SSH Key Pair Generated Successfully"
+
+      # Step to add the remote server to known hosts to avoid SSH prompts
+      - name: Add remote server to known hosts
+        run: |
+          ssh-keyscan -p ${SSH_PORT} -H ${MANAGER_IP} >> ~/.ssh/known_hosts
+          echo "Remote server added to known hosts"
+
+      # Step to deploy the Docker image to Docker Swarm on the remote server
+      - name: Deploy to Docker Swarm
+        run: |
+          # Log in to Docker Hub on the remote server
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes -p ${SSH_PORT} -o HostKeyAlgorithms=+ssh-rsa ${SSH_USER}@${MANAGER_IP} "docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_TOKEN }}"
+          # Pull the latest Docker image on the remote server
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes -p ${SSH_PORT} -o HostKeyAlgorithms=+ssh-rsa ${SSH_USER}@${MANAGER_IP} "docker pull ${{ secrets.DOCKER_USERNAME }}/docker-swarm-webapp:latest"
+          # Deploy the Docker stack using docker-compose.yml
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes -p ${SSH_PORT} -o HostKeyAlgorithms=+ssh-rsa ${SSH_USER}@${MANAGER_IP} "docker stack deploy -c docker-compose.yml webapp_stack"

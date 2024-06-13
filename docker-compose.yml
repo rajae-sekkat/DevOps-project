@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  webapp:
+    image: $DOCKER_USERNAME/docker-swarm-webapp:latest
+    deploy:
+      placement:
+        constraints:
+          - node.role == worker
+    ports:
+      - 80:80
