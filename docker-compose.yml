@@ -1,10 +1,11 @@
-version: '3.8'
-services:
-  webapp:
-    image: $DOCKER_USERNAME/docker-swarm-webapp:latest
-    deploy:
-      placement:
-        constraints:
-          - node.role == worker
-    ports:
-      - 80:80
+version: '3.8'  # Specifies the version of the Docker Compose file format
+
+services:  # Defines the services that will be run in the Docker Swarm stack
+  webapp:  # The name of the service
+    image: ${{ secrets.DOCKER_USERNAME }}/docker-swarm-webapp:latest  # Specifies the Docker image to use for this service
+    deploy:  # Deployment configuration for the service
+      placement:  # Placement configuration for the service
+        constraints:  # Constraints on where the service can be deployed
+          - node.role == worker  # Ensures that the service runs only on worker nodes
+    ports:  # Port mappings for the service
+      - 80:80  # Maps port 80 of the host to port 80 of the container
